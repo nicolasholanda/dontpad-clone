@@ -5,17 +5,16 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
-import lombok.Data;
 import lombok.Builder;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 import java.time.Duration;
+
 
 @Data
 @Builder
 @Entity
-@NoArgsConstructor
-@AllArgsConstructor
+@EqualsAndHashCode(callSuper=false)
 @Table(name = "note")
 public class Note extends PanacheEntityBase {
     @Id

@@ -5,3 +5,4 @@ PROJECT PRD.MD
 .idea
 **/target/
 db_data
+.vscode/
