@@ -6,9 +6,16 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import lombok.Data;
+import lombok.Builder;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+import java.time.Duration;
 
 @Data
+@Builder
 @Entity
+@NoArgsConstructor
+@AllArgsConstructor
 @Table(name = "note")
 public class Note extends PanacheEntityBase {
     @Id
@@ -19,4 +26,16 @@ public class Note extends PanacheEntityBase {
     private Instant expiresAt;
     private int version;
     private String passwordHash;
+
+    public static Note from(String path, Duration expiration) {
+        return Note.builder()
+            .path(path)
+            .content("")
+            .createdAt(Instant.now())
+            .updatedAt(Instant.now())
+            .expiresAt(Instant.now().plus(expiration))
+            .version(0)
+            .passwordHash("")
+            .build();
+    }
 }
