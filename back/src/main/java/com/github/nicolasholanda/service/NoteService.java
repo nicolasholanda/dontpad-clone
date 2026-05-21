@@ -2,7 +2,6 @@ package com.github.nicolasholanda.service;
 
 import com.github.nicolasholanda.repository.NoteRepository;
 import jakarta.inject.Inject;
-import java.time.Duration;
 import com.github.nicolasholanda.model.Note;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
@@ -16,12 +15,12 @@ public class NoteService {
 
     public Note getNoteByPath(String path) {
         return noteRepository.findByIdOptional(path)
-            .orElse(createNote(path));
+            .orElseGet(() -> createNote(path));
     }
 
     @Transactional
     public Note createNote(String path) {
-        Note note = Note.from(path, Duration.ofDays(30));
+        Note note = Note.from(path);
         return noteRepository.create(note);
     }
 }

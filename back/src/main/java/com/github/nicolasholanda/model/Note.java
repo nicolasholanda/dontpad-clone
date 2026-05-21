@@ -26,15 +26,18 @@ public class Note extends PanacheEntityBase {
     private int version;
     private String passwordHash;
 
-    public static Note from(String path, Duration expiration) {
+    public static final Duration DEFAULT_TTL = Duration.ofDays(90);
+
+    public static Note from(String path) {
+        Instant now = Instant.now();
         return Note.builder()
             .path(path)
             .content("")
-            .createdAt(Instant.now())
-            .updatedAt(Instant.now())
-            .expiresAt(Instant.now().plus(expiration))
-            .version(0)
-            .passwordHash("")
+            .createdAt(now)
+            .updatedAt(now)
+            .expiresAt(now.plus(DEFAULT_TTL))
+            .version(1)
+            .passwordHash(null)
             .build();
     }
 }
