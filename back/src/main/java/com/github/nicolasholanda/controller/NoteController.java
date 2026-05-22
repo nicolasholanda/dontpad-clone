@@ -4,6 +4,7 @@ import com.github.nicolasholanda.dto.NoteContentRequest;
 import com.github.nicolasholanda.dto.NoteResponse;
 import com.github.nicolasholanda.model.Note;
 import com.github.nicolasholanda.service.NoteService;
+import com.github.nicolasholanda.validation.ContentSizeValidator;
 import com.github.nicolasholanda.validation.PathValidator;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -15,12 +16,8 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-import java.nio.charset.StandardCharsets;
-
 @Path("/api/notes")
 public class NoteController {
-
-    private static final int MAX_CONTENT_BYTES = 100 * 1024;
 
     @Inject
     private NoteService noteService;
@@ -48,7 +45,7 @@ public class NoteController {
         if (request == null || request.content() == null) {
             return Response.status(Response.Status.BAD_REQUEST).build();
         }
-        if (request.content().getBytes(StandardCharsets.UTF_8).length > MAX_CONTENT_BYTES) {
+        if (ContentSizeValidator.exceedsLimit(request.content())) {
             return Response.status(413).build();
         }
         Note note = noteService.upsertNote(path, request.content());
