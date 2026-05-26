@@ -1,16 +1,32 @@
 # dontpad-clone
 
+A self-hosted clone of dontpad.com: a public, URL-addressable collaborative notepad. Visit any path and you share the same note with anyone else on that path.
+
 This project uses Quarkus, the Supersonic Subatomic Java Framework.
 
 If you want to learn more about Quarkus, please visit its website: <https://quarkus.io/>.
 
 ## Running the application in dev mode
 
-You can run your application in dev mode that enables live coding using:
+Start Postgres and Redis first:
+
+```shell script
+docker compose up -d
+```
+
+Then run the app in dev mode (live reload):
 
 ```shell script
 ./mvnw quarkus:dev
 ```
+
+Open any path in your browser, e.g.:
+
+```
+http://localhost:8080/my-test-note
+```
+
+The textarea auto-saves as you type (debounced 500ms). Open the same URL in a second tab to see changes propagate — the current frontend polls every 3 seconds, so syncing takes up to ~3s. Real-time sync via WebSocket comes in a later milestone.
 
 > **_NOTE:_**  Quarkus now ships with a Dev UI, which is available in dev mode only at <http://localhost:8080/q/dev/>.
 
