@@ -18,44 +18,21 @@
         return;
     }
 
-    const apiUrl = `/api/notes/${encodeURIComponent(path)}`;
+    const wsUrl = (() => {
+        const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+        return `${scheme}://${window.location.host}/ws/${encodeURIComponent(path)}`;
+    })();
 
+    const INITIAL_BACKOFF_MS = 500;
+    const MAX_BACKOFF_MS = 8000;
+    const SEND_DEBOUNCE_MS = 300;
+    const TYPING_QUIET_MS = 1000;
+
+    let socket = null;
     let localVersion = 0;
-    let userTypedSinceLastPoll = false;
-
-    async function load() {
-        try {
-            const res = await fetch(apiUrl);
-            if (res.status === 404) {
-                localVersion = 0;
-                setStatus("Saved");
-                return;
-            }
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-            editor.value = data.content;
-            localVersion = data.version;
-            setStatus("Saved");
-        } catch (err) {
-            setStatus("Error loading", true);
-        }
-    }
-
-    async function save() {
-        try {
-            const res = await fetch(apiUrl, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ content: editor.value })
-            });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-            localVersion = data.version;
-            setStatus("Saved");
-        } catch (err) {
-            setStatus("Error saving", true);
-        }
-    }
+    let backoffMs = INITIAL_BACKOFF_MS;
+    let isUserTyping = false;
+    let typingTimer = null;
 
     function debounce(fn, ms) {
         let t;
@@ -65,29 +42,79 @@
         };
     }
 
-    const debouncedSave = debounce(save, 500);
+    function connect() {
+        setStatus("Connecting…");
+        socket = new WebSocket(wsUrl);
 
-    editor.addEventListener("input", () => {
-        userTypedSinceLastPoll = true;
-        setStatus("Saving…");
-        debouncedSave();
-    });
+        socket.addEventListener("open", () => {
+            backoffMs = INITIAL_BACKOFF_MS;
+            setStatus("Connected");
+        });
 
-    async function poll() {
-        userTypedSinceLastPoll = false;
-        try {
-            const res = await fetch(apiUrl);
-            if (!res.ok) return;
-            const data = await res.json();
-            if (data.version > localVersion && !userTypedSinceLastPoll) {
-                editor.value = data.content;
-                localVersion = data.version;
-                setStatus("Saved");
+        socket.addEventListener("message", (event) => {
+            let msg;
+            try {
+                msg = JSON.parse(event.data);
+            } catch (e) {
+                return;
             }
-        } catch (err) {
+            handleMessage(msg);
+        });
+
+        socket.addEventListener("close", () => {
+            setStatus("Reconnecting…", true);
+            scheduleReconnect();
+        });
+
+        socket.addEventListener("error", () => {
+        });
+    }
+
+    function scheduleReconnect() {
+        setTimeout(connect, backoffMs);
+        backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
+    }
+
+    function handleMessage(msg) {
+        switch (msg.type) {
+            case "init":
+                editor.value = msg.content;
+                localVersion = msg.version;
+                setStatus("Connected");
+                break;
+            case "update":
+                if (!isUserTyping) {
+                    editor.value = msg.content;
+                }
+                localVersion = msg.version;
+                break;
+            case "error":
+                setStatus(`Error: ${msg.message}`, true);
+                break;
         }
     }
 
-    load();
-    setInterval(poll, 3000);
+    const sendUpdate = debounce(() => {
+        if (socket?.readyState !== WebSocket.OPEN) {
+            return;
+        }
+        socket.send(JSON.stringify({
+            type: "update",
+            content: editor.value,
+            baseVersion: localVersion
+        }));
+        setStatus("Saved");
+    }, SEND_DEBOUNCE_MS);
+
+    editor.addEventListener("input", () => {
+        isUserTyping = true;
+        clearTimeout(typingTimer);
+        typingTimer = setTimeout(() => { isUserTyping = false; }, TYPING_QUIET_MS);
+        if (socket?.readyState === WebSocket.OPEN) {
+            setStatus("Saving…");
+        }
+        sendUpdate();
+    });
+
+    connect();
 })();
