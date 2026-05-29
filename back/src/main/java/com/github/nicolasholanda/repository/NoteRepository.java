@@ -32,4 +32,15 @@ public class NoteRepository implements PanacheRepositoryBase<Note, String> {
         return note;
     }
 
+    public Note flushFromCache(String path, String content, int version) {
+        Instant now = Instant.now();
+        Note note = findByIdOptional(path).orElseGet(() -> Note.from(path));
+        note.setContent(content);
+        note.setVersion(version);
+        note.setUpdatedAt(now);
+        note.setExpiresAt(now.plus(Note.DEFAULT_TTL));
+        persist(note);
+        return note;
+    }
+
 }
