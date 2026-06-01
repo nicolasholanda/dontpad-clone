@@ -56,7 +56,7 @@ public class NoteWebSocket {
             return;
         }
         send(buildInit(path));
-        bridge.register(path, connection.id(), this::send);
+        bridge.register(path, connection.id());
     }
 
     @OnTextMessage

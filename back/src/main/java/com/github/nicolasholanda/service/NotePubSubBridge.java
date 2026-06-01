@@ -1,16 +1,19 @@
 package com.github.nicolasholanda.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.nicolasholanda.dto.ws.UpdateBroadcast;
 import io.quarkus.redis.datasource.RedisDataSource;
 import io.quarkus.redis.datasource.pubsub.PubSubCommands;
 import io.quarkus.redis.datasource.pubsub.PubSubCommands.RedisSubscriber;
+import io.quarkus.websockets.next.OpenConnections;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 
 @ApplicationScoped
 public class NotePubSubBridge {
@@ -18,9 +21,15 @@ public class NotePubSubBridge {
     @Inject
     RedisDataSource redis;
 
+    @Inject
+    OpenConnections openConnections;
+
+    @Inject
+    ObjectMapper mapper;
+
     private PubSubCommands<UpdateBroadcast> pubsub;
 
-    private final Map<String, Map<String, Consumer<UpdateBroadcast>>> sessionsByPath = new ConcurrentHashMap<>();
+    private final Map<String, Set<String>> sessionIdsByPath = new ConcurrentHashMap<>();
     private final Map<String, RedisSubscriber> subscribersByPath = new ConcurrentHashMap<>();
 
     @PostConstruct
@@ -28,19 +37,19 @@ public class NotePubSubBridge {
         pubsub = redis.pubsub(UpdateBroadcast.class);
     }
 
-    public void register(String path, String sessionId, Consumer<UpdateBroadcast> handler) {
-        sessionsByPath.compute(path, (p, sessions) -> {
+    public void register(String path, String sessionId) {
+        sessionIdsByPath.compute(path, (p, sessions) -> {
             if (sessions == null) {
-                sessions = new ConcurrentHashMap<>();
+                sessions = ConcurrentHashMap.newKeySet();
                 subscribeChannel(p);
             }
-            sessions.put(sessionId, handler);
+            sessions.add(sessionId);
             return sessions;
         });
     }
 
     public void unregister(String path, String sessionId) {
-        sessionsByPath.computeIfPresent(path, (p, sessions) -> {
+        sessionIdsByPath.computeIfPresent(path, (p, sessions) -> {
             sessions.remove(sessionId);
             if (sessions.isEmpty()) {
                 unsubscribeChannel(p);
@@ -67,18 +76,27 @@ public class NotePubSubBridge {
     }
 
     private void fanOut(String path, UpdateBroadcast message) {
-        Map<String, Consumer<UpdateBroadcast>> sessions = sessionsByPath.get(path);
-        if (sessions == null) {
+        Set<String> sessionIds = sessionIdsByPath.get(path);
+        if (sessionIds == null) {
             return;
         }
-        sessions.forEach((sessionId, handler) -> {
-            if (!sessionId.equals(message.originSessionId())) {
+        String json;
+        try {
+            json = mapper.writeValueAsString(message);
+        } catch (JsonProcessingException e) {
+            return;
+        }
+        for (String sessionId : sessionIds) {
+            if (sessionId.equals(message.originSessionId())) {
+                continue;
+            }
+            openConnections.findByConnectionId(sessionId).ifPresent(conn -> {
                 try {
-                    handler.accept(message);
+                    conn.sendTextAndAwait(json);
                 } catch (Exception ignored) {
                 }
-            }
-        });
+            });
+        }
     }
 
     private String channel(String path) {
