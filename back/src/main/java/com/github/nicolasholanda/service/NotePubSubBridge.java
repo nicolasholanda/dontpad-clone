@@ -3,6 +3,7 @@ package com.github.nicolasholanda.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.nicolasholanda.dto.ws.UpdateBroadcast;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.redis.datasource.RedisDataSource;
 import io.quarkus.redis.datasource.pubsub.PubSubCommands;
 import io.quarkus.redis.datasource.pubsub.PubSubCommands.RedisSubscriber;
@@ -27,6 +28,9 @@ public class NotePubSubBridge {
     @Inject
     ObjectMapper mapper;
 
+    @Inject
+    MeterRegistry meterRegistry;
+
     private PubSubCommands<UpdateBroadcast> pubsub;
 
     private final Map<String, Set<String>> sessionIdsByPath = new ConcurrentHashMap<>();
@@ -35,6 +39,15 @@ public class NotePubSubBridge {
     @PostConstruct
     void init() {
         pubsub = redis.pubsub(UpdateBroadcast.class);
+        meterRegistry.gauge("dontpad_active_websocket_connections", this, NotePubSubBridge::totalSessions);
+    }
+
+    public int totalSessions() {
+        int total = 0;
+        for (Set<String> sessions : sessionIdsByPath.values()) {
+            total += sessions.size();
+        }
+        return total;
     }
 
     public void register(String path, String sessionId) {
