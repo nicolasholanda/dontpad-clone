@@ -103,12 +103,9 @@ public class NotePubSubBridge {
             if (sessionId.equals(message.originSessionId())) {
                 continue;
             }
-            openConnections.findByConnectionId(sessionId).ifPresent(conn -> {
-                try {
-                    conn.sendTextAndAwait(json);
-                } catch (Exception ignored) {
-                }
-            });
+            openConnections.findByConnectionId(sessionId).ifPresent(conn ->
+                conn.sendText(json).subscribe().with(ignored -> {}, error -> {})
+            );
         }
     }
 
